@@ -211,7 +211,7 @@ fn toggle_commit_selector_flips_visibility_and_drops_focus() {
 fn has_review_commits_ignores_visibility_but_requires_multiple_non_worktree() {
     let mut app = build_app(vec![normal_commit("a"), normal_commit("b")]);
     app.review_commits = app.commit_list.clone();
-    app.diff_source = DiffSource::CommitRange(vec!["a".to_string(), "b".to_string()]);
+    app.diff_source = DiffSource::CommitRange(vec!["a".to_string(), "b".to_string()].into());
 
     app.show_commit_selector = false;
     assert!(app.has_review_commits());
@@ -452,7 +452,7 @@ fn should_comment_on_a_commit_only_file_after_narrowing_the_commit_pane() {
 fn is_diff_sole_pane_only_when_no_other_panes_visible() {
     let mut app = build_app(vec![normal_commit("a"), normal_commit("b")]);
     app.review_commits = app.commit_list.clone();
-    app.diff_source = DiffSource::CommitRange(vec!["a".to_string(), "b".to_string()]);
+    app.diff_source = DiffSource::CommitRange(vec!["a".to_string(), "b".to_string()].into());
 
     // File list visible -> not sole.
     app.show_file_list = true;

@@ -249,23 +249,29 @@ fn header_source_chunk(app: &App) -> Option<String> {
         DiffSource::Unstaged => Some(with_head_commit("unstaged", app)),
         DiffSource::StagedAndUnstaged => Some(with_head_commit("staged + unstaged", app)),
         DiffSource::CommitRange(commits) => {
-            if commits.len() == 1 {
-                Some(format!("commit {}", &commits[0][..7.min(commits[0].len())]))
+            if commits.commit_ids.len() == 1 {
+                Some(format!(
+                    "commit {}",
+                    &commits.commit_ids[0][..7.min(commits.commit_ids[0].len())]
+                ))
             } else {
                 Some(
                     app.commit_selection_summary()
-                        .unwrap_or_else(|| format!("{} commits", commits.len())),
+                        .unwrap_or_else(|| format!("{} commits", commits.commit_ids.len())),
                 )
             }
         }
         DiffSource::StagedUnstagedAndCommits(commits) => {
-            if commits.len() == 1 {
+            if commits.commit_ids.len() == 1 {
                 Some(format!(
                     "staged + unstaged + commit {}",
-                    &commits[0][..7.min(commits[0].len())]
+                    &commits.commit_ids[0][..7.min(commits.commit_ids[0].len())]
                 ))
             } else {
-                Some(format!("staged + unstaged + {} commits", commits.len()))
+                Some(format!(
+                    "staged + unstaged + {} commits",
+                    commits.commit_ids.len()
+                ))
             }
         }
         DiffSource::PullRequest(pr) => {
@@ -1166,7 +1172,7 @@ mod header_snapshot_tests {
     fn should_not_duplicate_commit_for_a_revision_review() {
         // `-r <sha>` already names its own revision; HEAD must not be appended.
         let app = build_local_app(
-            DiffSource::CommitRange(vec!["fedcba9876543210".to_string()]),
+            DiffSource::CommitRange(vec!["fedcba9876543210".to_string()].into()),
             "abcdef0123456789",
         );
         assert_eq!(

@@ -436,7 +436,7 @@ fn should_be_clear_to_fetch_when_due_and_none_in_flight() {
 fn should_spawn_a_worker_when_the_tick_says_fetch() {
     let mut app = build_app(
         vec![make_diff_file("a.rs", 1)],
-        DiffSource::CommitRange(Vec::new()),
+        DiffSource::CommitRange(Vec::new().into()),
     );
     app.diff_watch_interval = Some(Duration::from_millis(500));
     expire_deadline(&mut app);
@@ -781,12 +781,12 @@ fn should_discard_result_when_diff_source_changed_since_spawn() {
 #[test]
 fn should_discard_result_when_commit_selection_changed_since_spawn() {
     let request = DiffWatchReloadRequest {
-        diff_source: DiffSource::CommitRange(vec!["a".to_string()]),
+        diff_source: DiffSource::CommitRange(vec!["a".to_string()].into()),
         commit_selection_range: Some((0, 0)),
     };
     let mut app = build_app(
         vec![make_diff_file("a.rs", 1)],
-        DiffSource::CommitRange(vec!["a".to_string()]),
+        DiffSource::CommitRange(vec!["a".to_string()].into()),
     );
     app.commit_selection_range = Some((0, 1));
 
@@ -921,12 +921,12 @@ fn should_be_stale_when_diff_source_changed() {
 #[test]
 fn should_be_stale_when_commit_selection_changed() {
     let request = DiffWatchReloadRequest {
-        diff_source: DiffSource::CommitRange(vec!["a".to_string()]),
+        diff_source: DiffSource::CommitRange(vec!["a".to_string()].into()),
         commit_selection_range: Some((0, 0)),
     };
     assert!(diff_watch_result_is_stale(
         &request,
-        &DiffSource::CommitRange(vec!["a".to_string()]),
+        &DiffSource::CommitRange(vec!["a".to_string()].into()),
         Some((0, 1)),
         InputMode::Normal,
     ));

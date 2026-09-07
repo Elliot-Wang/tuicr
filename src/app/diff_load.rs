@@ -238,13 +238,13 @@ impl App {
     pub(in crate::app) fn get_working_tree_with_commits_diff_with_ignore(
         vcs: &dyn VcsBackend,
         repo_root: &Path,
-        commit_ids: &[String],
+        range: &ResolvedRevisionRange<'_>,
         highlighter: &SyntaxHighlighter,
         path_filter: Option<&str>,
     ) -> Result<Vec<DiffFile>> {
         let diff_files = crate::profile::time_with(
             "diff.load_working_tree_with_commits",
-            || vcs.get_working_tree_with_commits_diff(commit_ids, highlighter),
+            || vcs.get_working_tree_with_revision_diff(range, highlighter),
             profile_diff_result,
         )?;
         let diff_files = Self::filter_ignored_diff_files(repo_root, diff_files);
@@ -592,7 +592,7 @@ impl App {
     /// It returns a value instead of fetching so the caller can resolve it on
     /// the main thread and hand the result to a worker, rather than sharing
     /// `App` across threads.
-    fn narrowed_fetch_source(
+    pub(in crate::app) fn narrowed_fetch_source(
         diff_source: &DiffSource,
         review_commits: &[CommitInfo],
         commit_selection_range: Option<(usize, usize)>,
@@ -608,7 +608,17 @@ impl App {
         }
         let (start, end) =
             commit_selection_range.expect("is_strict_commit_selection guarantees Some(range)");
-        Self::source_for_commit_subrange(review_commits, start, end)
+        let mut source = Self::source_for_commit_subrange(review_commits, start, end);
+        // Deselecting only staged/unstaged rows still selects the original commit range.
+        if let (
+            DiffSource::CommitRange(original) | DiffSource::StagedUnstagedAndCommits(original),
+            DiffSource::CommitRange(selected) | DiffSource::StagedUnstagedAndCommits(selected),
+        ) = (diff_source, &mut source)
+            && original.commit_ids == selected.commit_ids
+        {
+            selected.diff_target = original.diff_target.clone();
+        }
+        source
     }
 
     /// Where the current commit selection lands in a rebuilt pane.
@@ -688,9 +698,9 @@ impl App {
         // visible at once and the compiler rejects a missing one.
         match (has_staged, has_unstaged, selected_ids.is_empty()) {
             // No staged or unstaged entry in the selection, so it is only commits.
-            (false, false, _) => DiffSource::CommitRange(selected_ids),
+            (false, false, _) => DiffSource::CommitRange(selected_ids.into()),
             // A special entry plus real commits.
-            (_, _, false) => DiffSource::StagedUnstagedAndCommits(selected_ids),
+            (_, _, false) => DiffSource::StagedUnstagedAndCommits(selected_ids.into()),
             // Special entries only, no commits alongside them.
             (true, true, true) => DiffSource::StagedAndUnstaged,
             (true, false, true) => DiffSource::Staged,
@@ -713,7 +723,7 @@ impl App {
             DiffSource::CommitRange(commit_ids) => Self::get_commit_range_diff_with_ignore(
                 vcs,
                 root_path,
-                &ResolvedRevisionRange::from_commit_ids(commit_ids, RevisionDiffTarget::CommitList),
+                commit_ids,
                 highlighter,
                 path_filter,
             ),
@@ -919,7 +929,7 @@ impl App {
         let diff_files = match Self::get_working_tree_with_commits_diff_with_ignore(
             self.vcs.as_ref(),
             &self.vcs_info.root_path,
-            &selected_ids,
+            &ResolvedRevisionRange::from_commit_ids(&selected_ids, RevisionDiffTarget::CommitList),
             highlighter,
             self.path_filter.as_deref(),
         ) {
@@ -940,7 +950,7 @@ impl App {
         self.reset_persisted_session_tracking();
 
         self.diff_files = diff_files;
-        self.diff_source = DiffSource::StagedUnstagedAndCommits(selected_ids);
+        self.diff_source = DiffSource::StagedUnstagedAndCommits(selected_ids.into());
         self.input_mode = InputMode::Normal;
         self.diff_state = DiffState::default();
         self.file_list_state = FileListState::default();

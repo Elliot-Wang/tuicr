@@ -242,16 +242,17 @@ fn scope_banner(diff_source: &DiffSource) -> Option<String> {
         DiffSource::Staged => Some("Reviewing staged changes".to_string()),
         DiffSource::Unstaged => Some("Reviewing unstaged changes".to_string()),
         DiffSource::StagedAndUnstaged => Some("Reviewing staged + unstaged changes".to_string()),
-        DiffSource::CommitRange(commits) if commits.len() == 1 => Some(format!(
+        DiffSource::CommitRange(commits) if commits.commit_ids.len() == 1 => Some(format!(
             "Reviewing commit: {}",
-            &commits[0][..7.min(commits[0].len())]
+            &commits.commit_ids[0][..7.min(commits.commit_ids[0].len())]
         )),
-        DiffSource::CommitRange(commits) => {
-            Some(format!("Reviewing commits: {}", short_ids(commits)))
-        }
+        DiffSource::CommitRange(commits) => Some(format!(
+            "Reviewing commits: {}",
+            short_ids(&commits.commit_ids)
+        )),
         DiffSource::StagedUnstagedAndCommits(commits) => Some(format!(
             "Reviewing staged + unstaged + commits: {}",
-            short_ids(commits)
+            short_ids(&commits.commit_ids)
         )),
     }
 }
@@ -979,7 +980,7 @@ mod tests {
         }
 
         let diff_source =
-            DiffSource::CommitRange(vec!["ed50028".to_string(), "c17beb2".to_string()]);
+            DiffSource::CommitRange(vec!["ed50028".to_string(), "c17beb2".to_string()].into());
         let markdown = generate_markdown(
             &session,
             &diff_source,
@@ -1170,7 +1171,7 @@ mod tests {
 
         let markdown = generate_markdown(
             &session,
-            &DiffSource::CommitRange(vec!["abc1234567890".to_string()]),
+            &DiffSource::CommitRange(vec!["abc1234567890".to_string()].into()),
             &comment_types(),
             &ExportConfig::default(),
             &[],
@@ -1200,7 +1201,7 @@ mod tests {
 
         let markdown = generate_markdown(
             &session,
-            &DiffSource::CommitRange(vec!["abc1234567890".to_string()]),
+            &DiffSource::CommitRange(vec!["abc1234567890".to_string()].into()),
             &comment_types(),
             &ExportConfig::default(),
             &[],
@@ -1313,10 +1314,9 @@ mod tests {
     fn should_include_commit_range_in_markdown() {
         // given
         let session = create_test_session();
-        let diff_source = DiffSource::CommitRange(vec![
-            "abc1234567890".to_string(),
-            "def4567890123".to_string(),
-        ]);
+        let diff_source = DiffSource::CommitRange(
+            vec!["abc1234567890".to_string(), "def4567890123".to_string()].into(),
+        );
 
         // when
         let markdown = generate_markdown(
@@ -1336,7 +1336,7 @@ mod tests {
     fn should_include_single_commit_in_markdown() {
         // given
         let session = create_test_session();
-        let diff_source = DiffSource::CommitRange(vec!["abc1234567890".to_string()]);
+        let diff_source = DiffSource::CommitRange(vec!["abc1234567890".to_string()].into());
 
         // when
         let markdown = generate_markdown(

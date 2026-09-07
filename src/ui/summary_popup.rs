@@ -637,7 +637,8 @@ mod tests {
         let mut app = make_app();
         app.show_file_list = false;
         app.show_commit_selector = true;
-        app.diff_source = DiffSource::CommitRange(vec!["aaa".to_string(), "bbb".to_string()]);
+        app.diff_source =
+            DiffSource::CommitRange(vec!["aaa".to_string(), "bbb".to_string()].into());
         app.review_commits = ["aaa", "bbb"]
             .into_iter()
             .map(|id| CommitInfo {

@@ -160,7 +160,7 @@ impl App {
                 let diff_files = Self::get_working_tree_with_commits_diff_with_ignore(
                     vcs.as_ref(),
                     &vcs_info.root_path,
-                    &commit_ids,
+                    &revision_range,
                     highlighter,
                     options.path_filter,
                 )?;
@@ -200,7 +200,7 @@ impl App {
                     output_to_stdout,
                     diff_files,
                     session,
-                    DiffSource::StagedUnstagedAndCommits(commit_ids),
+                    DiffSource::StagedUnstagedAndCommits(revision_range),
                     InputMode::Normal,
                     Vec::new(),
                     options.path_filter,
@@ -262,7 +262,7 @@ impl App {
                 output_to_stdout,
                 diff_files,
                 session,
-                DiffSource::CommitRange(commit_ids),
+                DiffSource::CommitRange(revision_range),
                 InputMode::Normal,
                 Vec::new(),
                 options.path_filter,

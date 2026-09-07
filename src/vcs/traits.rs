@@ -109,6 +109,12 @@ impl<'a> ResolvedRevisionRange<'a> {
     }
 }
 
+impl From<Vec<String>> for ResolvedRevisionRange<'static> {
+    fn from(commit_ids: Vec<String>) -> Self {
+        Self::from_owned_commit_ids(commit_ids, RevisionDiffTarget::CommitList)
+    }
+}
+
 /// RevisionDiffTarget describes the old and new sides of a revision diff.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RevisionDiffTarget {
@@ -116,7 +122,6 @@ pub enum RevisionDiffTarget {
     ///
     /// This is used when the user selected commits as commits,
     /// for example through the inline commit selector,
-    /// reloading an active commit-range session,
     /// or a backend that only reports a resolved commit list.
     /// In this mode,
     /// backends infer the old side from the oldest selected commit.
@@ -272,6 +277,15 @@ pub trait VcsBackend: Send {
         Err(crate::error::TuicrError::UnsupportedOperation(
             "Working tree + commits diff not supported for this VCS".into(),
         ))
+    }
+
+    /// Load a combined review while preserving an explicitly resolved base.
+    fn get_working_tree_with_revision_diff(
+        &self,
+        range: &ResolvedRevisionRange<'_>,
+        highlighter: &SyntaxHighlighter,
+    ) -> Result<Vec<DiffFile>> {
+        self.get_working_tree_with_commits_diff(&range.commit_ids, highlighter)
     }
 
     /// Stage a file (add to index).

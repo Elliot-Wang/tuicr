@@ -388,6 +388,19 @@ impl VcsBackend for GitBackend {
         }
     }
 
+    fn get_working_tree_with_revision_diff(
+        &self,
+        range: &ResolvedRevisionRange<'_>,
+        highlighter: &SyntaxHighlighter,
+    ) -> Result<Vec<DiffFile>> {
+        match self {
+            Self::Libgit2(backend) => {
+                backend.get_working_tree_with_revision_diff(range, highlighter)
+            }
+            Self::Cli(backend) => backend.get_working_tree_with_revision_diff(range, highlighter),
+        }
+    }
+
     fn stage_file(&self, path: &Path) -> Result<()> {
         match self {
             Self::Libgit2(backend) => backend.stage_file(path),
@@ -537,5 +550,103 @@ mod tests {
             .expect("failed to set user email");
         run_git_command(root, &["add", "src/file.txt"]).expect("failed to add file");
         run_git_command(root, &["commit", "-m", "initial"]).expect("failed to commit");
+    }
+}
+
+#[cfg(test)]
+mod explicit_worktree_range_tests {
+    use super::*;
+    use std::collections::BTreeSet;
+
+    fn commit(repo: &git2::Repository, parents: &[git2::Oid], message: &str) -> git2::Oid {
+        let mut index = repo.index().unwrap();
+        index
+            .add_all(["*"], git2::IndexAddOption::DEFAULT, None)
+            .unwrap();
+        index.write().unwrap();
+        let tree = repo.find_tree(index.write_tree().unwrap()).unwrap();
+        let parents: Vec<_> = parents
+            .iter()
+            .map(|id| repo.find_commit(*id).unwrap())
+            .collect();
+        let signature = git2::Signature::now("Test", "test@example.invalid").unwrap();
+        repo.commit(
+            None,
+            &signature,
+            &signature,
+            message,
+            &tree,
+            &parents.iter().collect::<Vec<_>>(),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn explicit_base_survives_merged_history_and_includes_worktree_changes() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = git2::Repository::init(dir.path()).unwrap();
+        std::fs::write(dir.path().join("master.txt"), "old\n").unwrap();
+        let root = commit(&repo, &[], "root");
+        std::fs::write(dir.path().join("feature.txt"), "feature\n").unwrap();
+        let feature = commit(&repo, &[root], "feature");
+        std::fs::remove_file(dir.path().join("feature.txt")).unwrap();
+        let mut index = repo.index().unwrap();
+        index
+            .read_tree(&repo.find_commit(root).unwrap().tree().unwrap())
+            .unwrap();
+        index.write().unwrap();
+        std::fs::write(dir.path().join("master.txt"), "updated on master\n").unwrap();
+        let base = commit(&repo, &[root], "master advances");
+        std::fs::write(dir.path().join("feature.txt"), "feature\n").unwrap();
+        let head = commit(&repo, &[feature, base], "merge master into feature");
+        repo.reference("refs/heads/main", head, true, "test")
+            .unwrap();
+        repo.set_head("refs/heads/main").unwrap();
+        std::fs::write(dir.path().join("staged.txt"), "staged\n").unwrap();
+        let mut index = repo.index().unwrap();
+        index.add_path(Path::new("staged.txt")).unwrap();
+        index.write().unwrap();
+        std::fs::write(dir.path().join("feature.txt"), "feature\nunstaged\n").unwrap();
+        std::fs::write(dir.path().join("untracked.txt"), "untracked\n").unwrap();
+        let highlighter = SyntaxHighlighter::default();
+        for preference in [GitBackendPreference::Libgit2, GitBackendPreference::Cli] {
+            let backend =
+                GitBackend::discover_from(dir.path(), preference, DiffWhitespaceMode::Normal)
+                    .unwrap();
+            let range = backend
+                .resolve_revision_range(&format!("{base}..HEAD"))
+                .unwrap();
+            assert_eq!(range.commit_ids.first().unwrap(), &feature.to_string());
+            let files = backend
+                .get_working_tree_with_revision_diff(&range, &highlighter)
+                .unwrap();
+            let paths: BTreeSet<_> = files
+                .iter()
+                .map(|f| f.display_path().to_string_lossy().into_owned())
+                .collect();
+            assert_eq!(
+                paths,
+                BTreeSet::from([
+                    "feature.txt".into(),
+                    "staged.txt".into(),
+                    "untracked.txt".into()
+                ]),
+                "{preference:?}"
+            );
+            let feature_diff = files
+                .iter()
+                .find(|f| f.display_path() == Path::new("feature.txt"))
+                .unwrap();
+            assert!(
+                feature_diff
+                    .hunks
+                    .iter()
+                    .flat_map(|h| &h.lines)
+                    .any(|line| line.content.contains("unstaged"))
+            );
+            let committed = backend.get_commit_range_diff(&range, &highlighter).unwrap();
+            assert_eq!(committed.len(), 1);
+            assert_eq!(committed[0].display_path(), Path::new("feature.txt"));
+        }
     }
 }

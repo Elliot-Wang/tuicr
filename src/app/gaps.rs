@@ -325,6 +325,13 @@ impl App {
     pub(in crate::app) fn ref_commit(&self) -> Option<&str> {
         match &self.diff_source {
             DiffSource::CommitRange(commits) => {
+                if !Self::is_strict_commit_selection(
+                    self.commit_selection_range,
+                    self.review_commits.len(),
+                ) && let RevisionDiffTarget::Explicit { head, .. } = &commits.diff_target
+                {
+                    return Some(head);
+                }
                 // When the inline commit selector narrows to a subrange,
                 // review_commits is newest-first so index `start` is the
                 // newest selected commit — that's the snapshot to read from.
@@ -332,9 +339,9 @@ impl App {
                     self.review_commits
                         .get(start)
                         .map(|c| c.id.as_str())
-                        .or_else(|| commits.last().map(|s| s.as_str()))
+                        .or_else(|| commits.commit_ids.last().map(|s| s.as_str()))
                 } else {
-                    commits.last().map(|s| s.as_str())
+                    commits.commit_ids.last().map(|s| s.as_str())
                 }
             }
             _ => None,

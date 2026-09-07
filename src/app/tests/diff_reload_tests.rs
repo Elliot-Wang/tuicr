@@ -23,6 +23,7 @@ struct ScriptedVcs {
     /// call order, so a test can tell a narrowed subrange fetch apart from a
     /// full-range one.
     commit_range_diff_ids: Arc<Mutex<Vec<Vec<String>>>>,
+    diff_targets: Arc<Mutex<Vec<RevisionDiffTarget>>>,
 }
 
 impl ScriptedVcs {
@@ -38,6 +39,7 @@ impl ScriptedVcs {
             grammar_counts: Arc::new(Mutex::new(Vec::new())),
             commit_range_diff_results: RefCell::new(VecDeque::new()),
             commit_range_diff_ids: Arc::new(Mutex::new(Vec::new())),
+            diff_targets: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -98,6 +100,10 @@ impl VcsBackend for ScriptedVcs {
         revision_range: &ResolvedRevisionRange<'_>,
         _highlighter: &SyntaxHighlighter,
     ) -> Result<Vec<DiffFile>> {
+        self.diff_targets
+            .lock()
+            .unwrap()
+            .push(revision_range.diff_target.clone());
         self.commit_range_diff_ids
             .lock()
             .expect("commit range diff ids poisoned")
@@ -106,6 +112,14 @@ impl VcsBackend for ScriptedVcs {
             .borrow_mut()
             .pop_front()
             .expect("ScriptedVcs: get_commit_range_diff called more times than scripted")
+    }
+
+    fn get_working_tree_with_revision_diff(
+        &self,
+        range: &ResolvedRevisionRange<'_>,
+        highlighter: &SyntaxHighlighter,
+    ) -> Result<Vec<DiffFile>> {
+        self.get_commit_range_diff(range, highlighter)
     }
 
     fn fetch_context_lines(
@@ -368,7 +382,7 @@ fn should_reload_diff_files_keeping_narrowed_commit_selection() {
     let commit_ids_seen = vcs.commit_range_diff_ids();
     let mut app = build_app_with_scripted_vcs(narrowed, vcs);
     app.diff_source =
-        DiffSource::CommitRange(vec!["c1".to_string(), "c2".to_string(), "c3".to_string()]);
+        DiffSource::CommitRange(vec!["c1".to_string(), "c2".to_string(), "c3".to_string()].into());
     // `review_commits` is always stored newest-first; narrowed to just the
     // newest commit (c3), matching the initially loaded `diff_files` above.
     app.review_commits = vec![
@@ -403,7 +417,7 @@ fn should_fetch_changed_diff_files_keeping_narrowed_commit_selection() {
     let commit_ids_seen = vcs.commit_range_diff_ids();
     let mut app = build_app_with_scripted_vcs(narrowed, vcs);
     app.diff_source =
-        DiffSource::CommitRange(vec!["c1".to_string(), "c2".to_string(), "c3".to_string()]);
+        DiffSource::CommitRange(vec!["c1".to_string(), "c2".to_string(), "c3".to_string()].into());
     app.review_commits = vec![
         make_commit_info("c3"),
         make_commit_info("c2"),
@@ -421,5 +435,72 @@ fn should_fetch_changed_diff_files_keeping_narrowed_commit_selection() {
             .as_slice(),
         [vec!["c3".to_string()]],
         "diff-watch's probe fetch must use the narrowed selection, not the full commit range"
+    );
+}
+
+#[test]
+fn explicit_range_survives_reload_watch_and_uncached_selection_restore() {
+    for working_tree in [false, true] {
+        let files = vec![make_diff_file("feature.rs", FileStatus::Modified, 30)];
+        let vcs = ScriptedVcs::new();
+        for _ in 0..4 {
+            vcs.push_commit_range_diff(Ok(files.clone()));
+        }
+        let targets = Arc::clone(&vcs.diff_targets);
+        let mut app = build_app_with_scripted_vcs(files, vcs);
+        let target = RevisionDiffTarget::Explicit {
+            base: Some("master-base".into()),
+            head: "c2".into(),
+        };
+        let range = ResolvedRevisionRange::from_owned_commit_ids(
+            vec!["c1".into(), "c2".into()],
+            target.clone(),
+        );
+        app.diff_source = if working_tree {
+            DiffSource::StagedUnstagedAndCommits(range)
+        } else {
+            DiffSource::CommitRange(range)
+        };
+        app.review_commits = vec![make_commit_info("c2"), make_commit_info("c1")];
+        app.commit_selection_range = Some((0, 1));
+        app.reload_diff_files().unwrap();
+        assert!(app.fetch_changed_diff_files().unwrap().is_none());
+        app.commit_selection_range = Some((0, 0));
+        app.reload_inline_selection().unwrap();
+        app.range_diff_files = None;
+        app.commit_diff_cache.clear();
+        app.commit_selection_range = Some((0, 1));
+        app.reload_inline_selection().unwrap();
+        assert_eq!(
+            *targets.lock().unwrap(),
+            vec![
+                target.clone(),
+                target.clone(),
+                RevisionDiffTarget::CommitList,
+                target
+            ]
+        );
+    }
+}
+
+#[test]
+fn deselecting_worktree_rows_keeps_the_explicit_commit_base() {
+    let range = ResolvedRevisionRange::from_owned_commit_ids(
+        vec!["c1".into(), "c2".into()],
+        RevisionDiffTarget::Explicit {
+            base: Some("master-base".into()),
+            head: "c2".into(),
+        },
+    );
+    let source = DiffSource::StagedUnstagedAndCommits(range.clone());
+    let commits = vec![
+        App::staged_commit_entry(),
+        App::unstaged_commit_entry(),
+        make_commit_info("c2"),
+        make_commit_info("c1"),
+    ];
+    assert_eq!(
+        App::narrowed_fetch_source(&source, &commits, Some((2, 3))),
+        DiffSource::CommitRange(range)
     );
 }

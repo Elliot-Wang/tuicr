@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Bug Fixes
+
+- Preserve explicit Git revision endpoints in combined commit/worktree reviews and reloads. Merged histories no longer widen the diff to the parent of the oldest selected commit; restoring the full inline selection retains the original range.
+
 ## [0.25.0] - 2026-09-02
 
 ### Bug Fixes

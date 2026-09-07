@@ -1690,7 +1690,7 @@ mod remote_comments_snapshot_tests {
             false,
             diff_files,
             session,
-            DiffSource::CommitRange(vec!["HEAD".to_string()]),
+            DiffSource::CommitRange(vec!["HEAD".to_string()].into()),
             InputMode::Normal,
             Vec::new(),
             None,

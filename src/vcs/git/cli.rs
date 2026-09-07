@@ -404,6 +404,30 @@ impl VcsBackend for GitCliBackend {
         )
     }
 
+    fn get_working_tree_with_revision_diff(
+        &self,
+        range: &ResolvedRevisionRange<'_>,
+        highlighter: &SyntaxHighlighter,
+    ) -> Result<Vec<DiffFile>> {
+        let RevisionDiffTarget::Explicit { base, .. } = &range.diff_target else {
+            return self.get_working_tree_with_commits_diff(&range.commit_ids, highlighter);
+        };
+        let base_rev = base.as_deref().unwrap_or(EMPTY_TREE_OID);
+        self.get_cli_diff(
+            vec![
+                "diff".into(),
+                "--no-ext-diff".into(),
+                "--binary".into(),
+                base_rev.into(),
+                "--".into(),
+            ],
+            true,
+            GitContentSource::Revision(base_rev),
+            GitContentSource::Workdir,
+            highlighter,
+        )
+    }
+
     fn stage_file(&self, path: &Path) -> Result<()> {
         let output = Command::new("git")
             .current_dir(&self.root_path)

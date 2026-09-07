@@ -998,7 +998,7 @@ impl App {
 
         // Update app state
         self.diff_files = diff_files;
-        self.diff_source = DiffSource::CommitRange(selected_ids);
+        self.diff_source = DiffSource::CommitRange(selected_ids.into());
         self.input_mode = InputMode::Normal;
 
         // Reset navigation state
@@ -1070,8 +1070,11 @@ impl App {
             // can never disagree about it. An empty result is not an error
             // here: a subrange can legitimately contain no changes.
             None => {
-                let fetch_source =
-                    Self::source_for_commit_subrange(&self.review_commits, start, end);
+                let fetch_source = Self::narrowed_fetch_source(
+                    &self.diff_source,
+                    &self.review_commits,
+                    self.commit_selection_range,
+                );
                 let highlighter = self.theme.syntax_highlighter();
                 let fetched = match Self::fetch_diff_files_for_source(
                     self.vcs.as_ref(),

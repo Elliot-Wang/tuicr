@@ -617,8 +617,8 @@ pub enum DiffSource {
     Staged,
     Unstaged,
     StagedAndUnstaged,
-    CommitRange(Vec<String>),
-    StagedUnstagedAndCommits(Vec<String>),
+    CommitRange(ResolvedRevisionRange<'static>),
+    StagedUnstagedAndCommits(ResolvedRevisionRange<'static>),
     /// Remote PR review. Carries identity + base/head SHAs needed for
     /// context expansion and status bar labels.
     ///

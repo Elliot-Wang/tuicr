@@ -426,3 +426,7 @@ You can reference comments by number (e.g., "Regarding comment #2...").
 4. **Preserve reviewer intent** - don't over-engineer solutions
 5. **Be concise** in your response
 6. **If unclear**, ask for clarification rather than guessing
+
+### Explicit local revision boundaries
+
+`DiffSource::CommitRange` and `StagedUnstagedAndCommits` carry a `ResolvedRevisionRange`, including its explicit base/head. Keep those endpoints through reloads, diff-watch requests and uncached full-selection restoration. Only manually selected subranges use `RevisionDiffTarget::CommitList`. Git combined reviews call `get_working_tree_with_revision_diff`; the legacy commit-list method remains available for backends that do not resolve explicit endpoints.

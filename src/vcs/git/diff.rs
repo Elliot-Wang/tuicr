@@ -213,17 +213,26 @@ pub fn get_working_tree_with_commits_diff(
     whitespace_mode: DiffWhitespaceMode,
     highlighter: &SyntaxHighlighter,
 ) -> Result<Vec<DiffFile>> {
-    if commit_ids.is_empty() {
-        return Err(TuicrError::NoChanges);
-    }
+    get_working_tree_with_revision_diff(
+        repo,
+        &ResolvedRevisionRange::from_commit_ids(commit_ids, RevisionDiffTarget::CommitList),
+        whitespace_mode,
+        highlighter,
+    )
+}
 
-    let oldest_id = git2::Oid::from_str(&commit_ids[0])?;
-    let oldest_commit = repo.find_commit(oldest_id)?;
-
-    let old_tree = if oldest_commit.parent_count() > 0 {
-        Some(oldest_commit.parent(0)?.tree()?)
-    } else {
-        None
+pub fn get_working_tree_with_revision_diff(
+    repo: &Repository,
+    range: &ResolvedRevisionRange<'_>,
+    whitespace_mode: DiffWhitespaceMode,
+    highlighter: &SyntaxHighlighter,
+) -> Result<Vec<DiffFile>> {
+    let old_tree = match &range.diff_target {
+        RevisionDiffTarget::CommitList => commit_list_range_trees(repo, &range.commit_ids)?.0,
+        RevisionDiffTarget::Explicit { base, .. } => base
+            .as_deref()
+            .map(|base| tree_for_commit(repo, base))
+            .transpose()?,
     };
 
     let mut opts = diff_options(whitespace_mode);
