@@ -1282,6 +1282,7 @@ pub(super) fn render_unified_diff(frame: &mut Frame, app: &mut App, area: Rect) 
         scroll_offset: app.diff_state.scroll_offset,
         theme: &app.theme,
         comment_bars: &comment_bars,
+        fixed_gutters: false,
     };
 
     // Section-marker row tint (hunk headers + expand/hidden stubs). Painted
